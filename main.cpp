@@ -1,4 +1,6 @@
+#include <cstring>
 #include <fstream>
+#include <iomanip>
 
 using namespace std;
 
@@ -11,6 +13,7 @@ const ushort MAX_ART = 10000;
 const ushort MAX_CPRA = 100;
 const ushort CANT_RUB = 15;
 const ushort OFERTAS = 7;
+const ushort TAM_LINEA = 104;
 
 struct sArt {
     int codArt;
@@ -43,14 +46,13 @@ struct sRubArt {
     int pos;
 };
 
-// typedef sArt tvrArt[MAX_ART];
 typedef sDescArt tvrIndArt[MAX_ART];
 typedef sRub tvrRub[CANT_RUB];
 typedef sCpra tvrLstCpra[MAX_CPRA];
 typedef sRubArt tvrRubArt[MAX_ART];
 
 void Abrir(fstream &Art, ifstream &IndArt, ifstream &Rub, ifstream &LstCpra) {
-    Art.open("Articulos.txt");
+    Art.open("ArticulosModificado.txt");
     IndArt.open("IndDescripArt.txt");
     Rub.open("Rubros.txt");
     LstCpra.open("ListaCompras.txt");
@@ -63,18 +65,19 @@ void IntCmb(sRubArt &elem1, sRubArt &elem2) {
 }  // IntCmb
 
 void OrdxBur(tvrRubArt &vrRubArt, ushort cantArt) {
-    ushort k = 1;
+    ushort k = 0;
     bool ordenado;
 
     do {
         ordenado = true;
         k++;
 
-        for (ushort i = 1; i <= cantArt - k; i++)
+        for (ushort i = 0; i < cantArt - k; i++)
             if (vrRubArt[i].codRub > vrRubArt[i + 1].codRub) {
                 ordenado = false;
                 IntCmb(vrRubArt[i], vrRubArt[i + 1]);
             }
+
     } while (!ordenado);
 }  // OrdxBur
 
@@ -148,6 +151,75 @@ void VolcarArchivos(fstream &Art, ifstream &IndArt, tvrIndArt &vrIndArt,
     OrdxBur(vrRubArt, cantArt);
 }  // VolcarArchivos
 
+int BusBinVec(tvrIndArt vrIndArt, str30 clave, ushort cantArt) {
+    int ult = cantArt - 1;
+    int prim = 0;
+    int med;
+
+    while (prim <= ult) {
+        med = (prim + ult) / 2;
+
+        if (strcmp(vrIndArt[med].descArt, clave) == 0)
+            return med;
+        else if (strcmp(vrIndArt[med].descArt, clave) < 0)
+            prim = med + 1;
+        else
+            ult = med - 1;
+    }
+
+    return -1;
+}  // BusBinVec
+
+void ActLinea(fstream &Art, sArt &rArt, ushort posArt) {
+    Art.clear();
+    Art.seekp(TAM_LINEA * posArt);
+
+    Art << setw(8) << rArt.codArt << " ";
+    Art << setw(2) << rArt.codRub << " ";
+    Art << setw(30) << rArt.descArt << " ";
+    Art << setw(4) << rArt.stock << " ";
+    Art << setw(9) << fixed << setprecision(2) << rArt.preUni << " ";
+    Art << setw(10) << rArt.uniMed;
+
+    for (ushort i = 0; i < OFERTAS; i++) {
+        Art << " " << setw(1) << rArt.ofertas[i * 2] << " ";
+        Art << setw(2) << rArt.ofertas[i * 2 + 1];
+    }
+
+    Art << "\n";
+}
+
+void ProcCompras(fstream &Art, tvrIndArt vrIndArt, tvrLstCpra &vrLstCpra,
+                 ushort cantArt, ushort cantCpra) {
+    sArt rArt;
+    short posInd;
+    ushort posArt;
+
+    for (ushort i = 0; i < cantCpra; i++) {
+        posInd = BusBinVec(vrIndArt, vrLstCpra[i].descArt, cantArt);
+
+        if (posInd == -1 || !vrIndArt[posInd].estado) {
+            vrLstCpra[i].cantReq = 0;
+            continue;
+        }
+
+        posArt = vrIndArt[posInd].pos;
+        Art.clear();
+        Art.seekg(TAM_LINEA * posArt);
+        LeerArt(Art, rArt);
+
+        if (rArt.stock >= vrLstCpra[i].cantReq) {
+            rArt.stock -= vrLstCpra[i].cantReq;
+
+        } else {
+            vrLstCpra[i].cantReq = rArt.stock;
+            rArt.stock = 0;
+        }
+
+        ActLinea(Art, rArt, posArt);
+    }
+}
+
 void Cerrar(fstream &Art, ifstream &IndArt, ifstream &Rub, ifstream &LstCpra) {
     Art.close();
     IndArt.close();
@@ -156,7 +228,6 @@ void Cerrar(fstream &Art, ifstream &IndArt, ifstream &Rub, ifstream &LstCpra) {
 }  // Cerrar
 
 int main() {
-    // tvrArt vrArt;
     tvrIndArt vrIndArt;
     tvrRub vrRub;
     tvrLstCpra vrLstCpra;
@@ -173,7 +244,7 @@ int main() {
     Abrir(Art, IndArt, Rub, LstCpra);
     VolcarArchivos(Art, IndArt, vrIndArt, Rub, vrRub, LstCpra, vrLstCpra,
                    vrRubArt, cantArt, cantCpra);
+    ProcCompras(Art, vrIndArt, vrLstCpra, cantArt, cantCpra);
     Cerrar(Art, IndArt, Rub, LstCpra);
-
     return 0;
 }
